@@ -1,0 +1,12 @@
+[Unit]
+Description=Guest Pull Snapshotter for containerd
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/containerd-guest-pull-grpc
+Restart=always
+RestartSec=1
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target 

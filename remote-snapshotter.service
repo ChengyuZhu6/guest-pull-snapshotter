@@ -1,0 +1,12 @@
+[Unit]
+Description=Remote Snapshotter for containerd
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/guest-pull-snapshotter
+Restart=always
+RestartSec=1
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target 
