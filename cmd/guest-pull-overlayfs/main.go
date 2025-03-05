@@ -45,7 +45,7 @@ func parseArgs(args []string) (*mountArgs, error) {
 
 	if args[2] == "-o" && len(args[3]) != 0 {
 		for _, opt := range strings.Split(args[3], ",") {
-			// filter Nydus specific options
+			// filter guestpull specific options
 			if strings.HasPrefix(opt, kataVolumeOptionKey) {
 				continue
 			}
