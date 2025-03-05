@@ -78,6 +78,7 @@ func serve(ctx context.Context, rpc *grpc.Server, addr string, rs snapshots.Snap
 	// Register the service with the gRPC server
 	snapshotsapi.RegisterSnapshotsServer(rpc, snsvc)
 	// Prepare the directory for the socket
+	log.G(ctx).Infof("Preparing directory %q", filepath.Dir(addr))
 	if err := os.MkdirAll(filepath.Dir(addr), 0700); err != nil {
 		return false, fmt.Errorf("failed to create directory %q: %w", filepath.Dir(addr), err)
 	}
@@ -88,6 +89,7 @@ func serve(ctx context.Context, rpc *grpc.Server, addr string, rs snapshots.Snap
 	}
 
 	// Listen and serve
+	log.G(ctx).Infof("Listening on %q", addr)
 	errCh := make(chan error, 1)
 	l, err := net.Listen("unix", addr)
 	if err != nil {
