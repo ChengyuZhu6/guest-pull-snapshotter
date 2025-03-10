@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"syscall"
 
+	"github.com/containerd/log"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/sys/unix"
@@ -32,10 +32,12 @@ type mountArgs struct {
 }
 
 func parseArgs(args []string) (*mountArgs, error) {
+	log.L.Infof("parseArgs args: %v", args)
 	margs := &mountArgs{
 		fsType: args[0],
 		target: args[1],
 	}
+	log.L.Infof("parseArgs margs: %v", margs)
 	if margs.fsType != "overlay" {
 		return nil, errors.Errorf("invalid filesystem type %s for overlayfs", margs.fsType)
 	}
@@ -109,6 +111,7 @@ func run(args cli.Args) error {
 	}
 
 	flags, data := parseOptions(margs.options)
+	log.L.Infof("fsType: %v, target: %v, flags: %v, data: %v", margs.fsType, margs.target, uintptr(flags), data)
 	err = syscall.Mount(margs.fsType, margs.target, margs.fsType, uintptr(flags), data)
 	if err != nil {
 		return errors.Wrapf(err, "mount overlayfs by syscall")
@@ -135,7 +138,7 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		log.L.WithError(err).Fatal("failed to run guest-pull-overlayfs")
 	}
 
 	os.Exit(0)

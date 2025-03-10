@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	guestpull "github.com/ChengyuZhu6/guest-pull-snapshotter/guest-pull"
@@ -114,6 +115,15 @@ func (o *snapshotter) Prepare(ctx context.Context, key, parent string, opts ...s
 		log.L.Infof("Image reference found: %s", ref)
 	} else {
 		log.L.Infof("No image reference label found (%s)", targetRefLabel)
+	}
+
+	if len(s.ParentIDs) == 0 {
+		// if we only have one layer/no parents then just return a bind mount as overlay will not work
+		roFlag := "rw"
+		if s.Kind == snapshots.KindView {
+			roFlag = "ro"
+		}
+		return bindMount(o.upperPath(s.ID), roFlag), nil
 	}
 
 	if digest, ok := info.Labels[targetLayerDigestLabel]; ok {
@@ -455,22 +465,28 @@ func (o *snapshotter) mountWithGuestPull(ctx context.Context, s storage.Snapshot
 			fmt.Sprintf("workdir=%s", o.workPath(s.ID)),
 			fmt.Sprintf("upperdir=%s", o.upperPath(s.ID)),
 		)
+	} else if len(s.ParentIDs) == 1 {
+		return bindMount(o.upperPath(s.ID), "ro"), nil
 	}
-	os.Mkdir(filepath.Join(o.root, "snapshots", s.ID, "low"), 0755)
-	overlayOptions = append(overlayOptions, fmt.Sprintf("lowerdir=%s", filepath.Join(o.root, "snapshots", s.ID, "low")))
+	parentPaths := make([]string, len(s.ParentIDs))
+	for i := range s.ParentIDs {
+		parentPaths[i] = o.upperPath(s.ParentIDs[i])
+	}
+	overlayOptions = append(overlayOptions, fmt.Sprintf("lowerdir=%s", strings.Join(parentPaths, ":")))
 	log.G(ctx).Infof("remote mount options %v", overlayOptions)
 	opt, err := guestpull.PrepareGuestPullMounts(ctx, "", overlayOptions, map[string]string{})
 	overlayOptions = append(overlayOptions, opt...)
 	if err != nil {
 		return nil, err
 	}
-	return []mount.Mount{
+	mounts := []mount.Mount{
 		{
 			Type:    "fuse.guest-pull-overlayfs",
 			Source:  "overlay",
 			Options: overlayOptions,
 		},
-	}, nil
+	}
+	return mounts, nil
 }
 
 func (o *snapshotter) upperPath(id string) string {
@@ -479,4 +495,17 @@ func (o *snapshotter) upperPath(id string) string {
 
 func (o *snapshotter) workPath(id string) string {
 	return filepath.Join(o.root, "snapshots", id, "work")
+}
+
+func bindMount(source, roFlag string) []mount.Mount {
+	return []mount.Mount{
+		{
+			Type:   "bind",
+			Source: source,
+			Options: []string{
+				roFlag,
+				"rbind",
+			},
+		},
+	}
 }
