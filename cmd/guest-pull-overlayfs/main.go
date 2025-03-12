@@ -9,10 +9,9 @@ import (
 	"github.com/containerd/log"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/sys/unix"
 )
 
-// Kata virtual volume infmation passed from snapshotter to runtime through containerd.
+// Kata virtual volume information passed from snapshotter to runtime through containerd.
 // Please refer to `KataVirtualVolume` in https://github.com/kata-containers/kata-containers/blob/main/src/libs/kata-types/src/mount.rs
 const kataVolumeOptionKey = "io.katacontainers.volume="
 
@@ -31,21 +30,27 @@ type mountArgs struct {
 	options []string
 }
 
+// parseArgs parses command line arguments into mountArgs structure
 func parseArgs(args []string) (*mountArgs, error) {
-	log.L.Infof("parseArgs args: %v", args)
+
+	if len(args) < 2 {
+		return nil, errors.New("insufficient arguments for mount")
+	}
+
 	margs := &mountArgs{
 		fsType: args[0],
 		target: args[1],
 	}
-	log.L.Infof("parseArgs margs: %v", margs)
 	if margs.fsType != "overlay" {
 		return nil, errors.Errorf("invalid filesystem type %s for overlayfs", margs.fsType)
 	}
+
 	if len(margs.target) == 0 {
 		return nil, errors.New("empty overlayfs mount target")
 	}
 
-	if args[2] == "-o" && len(args[3]) != 0 {
+	// Check for options
+	if len(args) > 2 && args[2] == "-o" && len(args) > 3 && len(args[3]) != 0 {
 		for _, opt := range strings.Split(args[3], ",") {
 			// filter guestpull specific options
 			if strings.HasPrefix(opt, kataVolumeOptionKey) {
@@ -54,6 +59,7 @@ func parseArgs(args []string) (*mountArgs, error) {
 			margs.options = append(margs.options, opt)
 		}
 	}
+
 	if len(margs.options) == 0 {
 		return nil, errors.New("empty overlayfs mount options")
 	}
@@ -61,6 +67,7 @@ func parseArgs(args []string) (*mountArgs, error) {
 	return margs, nil
 }
 
+// parseOptions converts mount options to flags and data string
 func parseOptions(options []string) (int, string) {
 	flagsTable := map[string]int{
 		"async":         unix.MS_SYNCHRONOUS,
@@ -94,6 +101,7 @@ func parseOptions(options []string) (int, string) {
 		flags int
 		data  []string
 	)
+
 	for _, o := range options {
 		if f, exist := flagsTable[o]; exist {
 			flags |= f
@@ -101,9 +109,11 @@ func parseOptions(options []string) (int, string) {
 			data = append(data, o)
 		}
 	}
+
 	return flags, strings.Join(data, ",")
 }
 
+// run performs the mount operation with the provided arguments
 func run(args cli.Args) error {
 	margs, err := parseArgs(args.Slice())
 	if err != nil {
@@ -112,10 +122,12 @@ func run(args cli.Args) error {
 
 	flags, data := parseOptions(margs.options)
 	log.L.Infof("fsType: %v, target: %v, flags: %v, data: %v", margs.fsType, margs.target, uintptr(flags), data)
+
 	err = syscall.Mount(margs.fsType, margs.target, margs.fsType, uintptr(flags), data)
 	if err != nil {
 		return errors.Wrapf(err, "mount overlayfs by syscall")
 	}
+
 	return nil
 }
 
