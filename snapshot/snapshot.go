@@ -496,6 +496,7 @@ func (o *snapshotter) workPath(id string) string {
 }
 
 func bindMount(source, roFlag string) []mount.Mount {
+	log.L.Debugf("Binding mount source: %s, roFlag: %s", source, roFlag)
 	return []mount.Mount{
 		{
 			Type:   "bind",
