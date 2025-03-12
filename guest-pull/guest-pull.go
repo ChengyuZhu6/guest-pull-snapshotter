@@ -12,7 +12,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Constants for Kata virtual volume configuration
+// Constants for Kata virtual volume configuration:
+//
+//	https://github.com/kata-containers/kata-containers/blob/main/src/runtime/virtcontainers/pkg/config/config.go#L100
 const (
 	// KataVirtualVolumeOptionName is the option key for Kata virtual volumes
 	KataVirtualVolumeOptionName = "io.katacontainers.volume"
@@ -43,7 +45,6 @@ func PrepareGuestPullMounts(ctx context.Context, source string, options []string
 		ctx = context.Background()
 	}
 
-	// Create and populate the virtual volume configuration
 	volume := &KataVirtualVolume{
 		VolumeType: KataVirtualVolumeImageGuestPullType,
 		Source:     source,
@@ -51,7 +52,6 @@ func PrepareGuestPullMounts(ctx context.Context, source string, options []string
 		ImagePull:  &ImagePullVolume{Metadata: labels},
 	}
 
-	// Marshal the volume configuration to JSON
 	volumeJSON, err := json.Marshal(volume)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal KataVirtualVolume object")

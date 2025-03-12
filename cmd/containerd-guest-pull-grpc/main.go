@@ -63,7 +63,6 @@ func main() {
 
 // createSnapshotter creates and initializes a snapshotter
 func createSnapshotter(ctx context.Context, rootDir string) (snapshots.Snapshotter, error) {
-	// Create options with root directory
 	opts := []snapshot.Opt{
 		snapshot.WithRootDirectory(rootDir),
 	}
@@ -77,7 +76,6 @@ func createSnapshotter(ctx context.Context, rootDir string) (snapshots.Snapshott
 
 // startServer starts the gRPC server and handles signals
 func startServer(ctx context.Context, rpc *grpc.Server, addr string, snapshotter snapshots.Snapshotter, cancel context.CancelFunc) error {
-	// Register snapshot service
 	snsvc := snapshotservice.FromSnapshotter(snapshotter)
 	snapshotsapi.RegisterSnapshotsServer(rpc, snsvc)
 
