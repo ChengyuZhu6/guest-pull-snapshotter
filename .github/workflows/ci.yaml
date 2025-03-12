@@ -48,9 +48,7 @@ jobs:
         with:
           go-version: '1.23.x'
 
-      - name: Build guest-pull-overlayfs
-        run: go build -v ./cmd/guest-pull-overlayfs
+      - name: Build containerd-guest-pull-grpc and guest-pull-overlayfs
+        run: make build
 
-      - name: Build containerd-guest-pull-grpc
-        run: go build -v ./cmd/containerd-guest-pull-grpc
 
