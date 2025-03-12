@@ -8,14 +8,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	snapshotsapi "github.com/containerd/containerd/api/services/snapshots/v1"
 	"github.com/containerd/containerd/v2/contrib/snapshotservice"
 	"github.com/containerd/containerd/v2/core/snapshots"
-	"golang.org/x/sys/unix"
-
 	"github.com/containerd/log"
 	"github.com/pelletier/go-toml"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 
 	"github.com/ChengyuZhu6/guest-pull-snapshotter/config"
@@ -27,94 +27,112 @@ func main() {
 	flag.Parse()
 
 	log.SetFormat(log.JSONFormat)
-	err := log.SetLevel(*config.LogLevel)
-	if err != nil {
-		log.L.WithError(err).Fatal("failed to prepare logger")
+	if err := log.SetLevel(*config.LogLevel); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to set log level: %v\n", err)
+		os.Exit(1)
 	}
+
 	if *config.PrintVersion {
-		fmt.Println("containerd-guest-pull-grpc", version.Version, version.Revision)
+		fmt.Printf("containerd-guest-pull-grpc %s %s\n", version.Version, version.Revision)
 		return
 	}
 
-	var (
-		ctx          = log.WithLogger(context.Background(), log.L)
-		remoteconfig = config.RemoteConfig{}
-	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = log.WithLogger(ctx, log.L)
 
-	tree, err := toml.LoadFile(*config.ConfigPath)
-	if err != nil && !(os.IsNotExist(err) && *config.ConfigPath == config.DefaultConfigPath) {
-		log.G(ctx).WithError(err).Fatalf("failed to load config file %q", *config.ConfigPath)
+	remoteConfig, err := loadConfig(ctx, *config.ConfigPath)
+	if err != nil {
+		log.G(ctx).WithError(err).Fatal("failed to load configuration")
 	}
-	if err := tree.Unmarshal(&remoteconfig); err != nil {
-		log.G(ctx).WithError(err).Fatalf("failed to unmarshal config file %q", *config.ConfigPath)
-	}
-	log.G(ctx).Infof("remoteconfig: %+v", remoteconfig)
+	log.G(ctx).Infof("remote config loaded: %+v", remoteConfig)
 
-	// Create a gRPC server
+	snapshotter, err := createSnapshotter(ctx, *config.RootDir)
+	if err != nil {
+		log.G(ctx).WithError(err).Fatal("failed to create snapshotter")
+	}
+	defer snapshotter.Close()
+
 	rpc := grpc.NewServer()
-
-	var rs snapshots.Snapshotter
-	var opts []snapshot.Opt
-	rs, err = snapshot.NewSnapshotter(ctx, *config.RootDir, opts...)
-	if err != nil {
-		return
-	}
-	cleanup, err := serve(ctx, rpc, *config.Address, rs)
-	if err != nil {
-		log.G(ctx).WithError(err).Fatalf("failed to serve snapshotter")
+	if err := startServer(ctx, rpc, *config.Address, snapshotter, cancel); err != nil {
+		log.G(ctx).WithError(err).Fatal("server error")
 	}
 
-	if cleanup {
-		log.G(ctx).Debug("Closing the snapshotter")
-		rs.Close()
-	}
-	log.G(ctx).Info("Exiting")
+	log.G(ctx).Info("service exited successfully")
 }
 
-func serve(ctx context.Context, rpc *grpc.Server, addr string, rs snapshots.Snapshotter) (bool, error) {
-	// Convert the snapshotter to a gRPC service,
-	snsvc := snapshotservice.FromSnapshotter(rs)
+// loadConfig loads configuration from the specified path
+func loadConfig(ctx context.Context, configPath string) (config.RemoteConfig, error) {
+	var remoteConfig config.RemoteConfig
 
-	// Register the service with the gRPC server
-	snapshotsapi.RegisterSnapshotsServer(rpc, snsvc)
-	// Prepare the directory for the socket
-	log.G(ctx).Infof("Preparing directory %q", filepath.Dir(addr))
-	if err := os.MkdirAll(filepath.Dir(addr), 0700); err != nil {
-		return false, fmt.Errorf("failed to create directory %q: %w", filepath.Dir(addr), err)
-	}
-
-	// Try to remove the socket file to avoid EADDRINUSE
-	if err := os.RemoveAll(addr); err != nil {
-		return false, fmt.Errorf("failed to remove %q: %w", addr, err)
-	}
-
-	// Listen and serve
-	log.G(ctx).Infof("Listening on %q", addr)
-	errCh := make(chan error, 1)
-	l, err := net.Listen("unix", addr)
+	tree, err := toml.LoadFile(configPath)
 	if err != nil {
-		return false, fmt.Errorf("error on listen socket %q: %w", addr, err)
+		if os.IsNotExist(err) && configPath == config.DefaultConfigPath {
+			log.G(ctx).Warn("config file not found, using defaults")
+			return remoteConfig, nil
+		}
+		return remoteConfig, fmt.Errorf("failed to load config file %q: %w", configPath, err)
 	}
+
+	if err := tree.Unmarshal(&remoteConfig); err != nil {
+		return remoteConfig, fmt.Errorf("failed to unmarshal config file %q: %w", configPath, err)
+	}
+
+	return remoteConfig, nil
+}
+
+// createSnapshotter creates and initializes a snapshotter
+func createSnapshotter(ctx context.Context, rootDir string) (snapshots.Snapshotter, error) {
+	var opts []snapshot.Opt
+	snapshotter, err := snapshot.NewSnapshotter(ctx, rootDir, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create snapshotter: %w", err)
+	}
+	return snapshotter, nil
+}
+
+// startServer starts the gRPC server and handles signals
+func startServer(ctx context.Context, rpc *grpc.Server, addr string, snapshotter snapshots.Snapshotter, cancel context.CancelFunc) error {
+	// Register snapshot service
+	snsvc := snapshotservice.FromSnapshotter(snapshotter)
+	snapshotsapi.RegisterSnapshotsServer(rpc, snsvc)
+
+	socketDir := filepath.Dir(addr)
+	if err := os.MkdirAll(socketDir, 0700); err != nil {
+		return fmt.Errorf("failed to create directory %q: %w", socketDir, err)
+	}
+
+	if err := os.RemoveAll(addr); err != nil {
+		return fmt.Errorf("failed to remove existing socket %q: %w", addr, err)
+	}
+
+	listener, err := net.Listen("unix", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on socket %q: %w", addr, err)
+	}
+
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, unix.SIGINT, unix.SIGTERM, syscall.SIGPIPE)
+
+	// Start server
+	errCh := make(chan error, 1)
 	go func() {
-		if err := rpc.Serve(l); err != nil {
-			errCh <- fmt.Errorf("error on serving via socket %q: %w", addr, err)
+		log.G(ctx).Infof("starting gRPC server on %q", addr)
+		if err := rpc.Serve(listener); err != nil {
+			errCh <- err
 		}
 	}()
 
-	var s os.Signal
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, unix.SIGINT, unix.SIGTERM)
 	select {
-	case s = <-sigCh:
-		log.G(ctx).Infof("Got %v", s)
+	case sig := <-signalCh:
+		log.G(ctx).Infof("received signal: %v", sig)
+		rpc.GracefulStop()
 	case err := <-errCh:
-		return false, err
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+		log.G(ctx).Info("context canceled")
+		rpc.Stop()
 	}
-	if s == unix.SIGINT {
-		log.G(ctx).Infof("Got SIGINT")
-	}
-	if s == unix.SIGTERM {
-		log.G(ctx).Infof("Got SIGTERM")
-	}
-	return false, nil
+
+	return nil
 }
