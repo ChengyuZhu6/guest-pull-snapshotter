@@ -37,6 +37,20 @@ jobs:
       - name: Run tests
         run: go test -v -race ./...
 
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Run integration tests
+        run: make test
+
   build:
     name: Build
     runs-on: ubuntu-24.04
