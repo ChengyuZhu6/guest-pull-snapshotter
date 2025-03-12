@@ -372,11 +372,6 @@ func (o *snapshotter) setupSnapshotDirectory(td string, s storage.Snapshot, pare
 			}
 		}
 	}
-
-	if err := os.MkdirAll(filepath.Join(td, "low"), 0755); err != nil {
-		return errors.Wrap(err, "failed to create low directory")
-	}
-
 	return nil
 }
 
