@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6.5.0
+        with:
+          version: v1.64.5
+          args: --verbose --timeout=10m
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Build guest-pull-overlayfs
+        run: go build -v ./cmd/guest-pull-overlayfs
+
+      - name: Build containerd-guest-pull-grpc
+        run: go build -v ./cmd/containerd-guest-pull-grpc
+
