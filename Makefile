@@ -24,6 +24,7 @@ LDFLAGS = -s -w -X ${PKG}/version.Version=${VERSION} -X ${PKG}/version.Revision=
 build:
 	GOOS=${GOOS} GOARCH=${GOARCH} ${PROXY} go build -ldflags "$(LDFLAGS)" -v -o bin/containerd-guest-pull-grpc ./cmd/containerd-guest-pull-grpc
 	GOOS=${GOOS} GOARCH=${GOARCH} ${PROXY} go build -ldflags "$(LDFLAGS)" -v -o bin/guest-pull-overlayfs ./cmd/guest-pull-overlayfs
+	chmod +x bin/*
 .PHONY: clean
 clean:
 	rm -f bin/*

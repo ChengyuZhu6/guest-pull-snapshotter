@@ -1,0 +1,18 @@
+#
+# 
+#
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: v1
+kind: Pod
+metadata:
+  name: functional-test-guest-pull-pod
+  annotations:
+    io.containerd.cri.runtime-handler: kata-qemu-coco-dev
+spec:
+  runtimeClassName: kata-qemu-coco-dev
+  containers:
+  - name: functional-test
+    image: quay.io/prometheus/busybox:latest
+    command:
+      - sleep
+      - "120"
