@@ -82,7 +82,7 @@ func (o *snapshotter) Close() error {
 }
 
 func (o *snapshotter) Prepare(ctx context.Context, key, parent string, opts ...snapshots.Opt) ([]mount.Mount, error) {
-	log.G(ctx).Debugf("Prepare snapshot with key %s, parent %s", key, parent)
+	log.G(ctx).Debugf("Prepare snapshot with key %s, parent %s, opts %v", key, parent, opts)
 
 	var base snapshots.Info
 	for _, opt := range opts {
