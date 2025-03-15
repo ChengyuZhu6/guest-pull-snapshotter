@@ -1,0 +1,9 @@
+[Unit]
+Description=Guest-pull snapshotter
+After=network.target local-fs.target
+
+[Service]
+ExecStart=/usr/local/bin/containerd-guest-pull-grpc
+
+[Install]
+WantedBy=multi-user.target
