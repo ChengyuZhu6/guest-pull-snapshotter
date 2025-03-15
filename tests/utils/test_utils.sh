@@ -64,6 +64,7 @@ spec:
     command:
       - sleep
       - "120"
+    imagePullPolicy: Always
 EOF
     fi
     

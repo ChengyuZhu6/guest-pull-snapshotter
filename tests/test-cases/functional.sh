@@ -7,6 +7,7 @@ source tests/utils/test_utils.sh
 # Define test images
 declare -A TEST_IMAGES
 TEST_IMAGES["busybox"]="quay.io/chengyuzhu6/busybox:latest"
+TEST_IMAGES["ubuntu"]="quay.io/chengyuzhu6/ubuntu:24.04"
 TEST_IMAGES["nginx"]="quay.io/chengyuzhu6/nginx:latest"
 
 echo "Running functional tests for guest-pull"
