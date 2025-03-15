@@ -5,13 +5,33 @@ echo "Configuring guest pull in containerd"
 
 CONTAINERD_CONFIG="/etc/containerd/config.toml"
 
-if grep -q "disable_snapshot_annotations" "$CONTAINERD_CONFIG"; then
-    sed -i 's/disable_snapshot_annotations = true/disable_snapshot_annotations = false/g' "$CONTAINERD_CONFIG"
-    echo "Changed disable_snapshot_annotations from true to false"
-else
-    echo "Warning: disable_snapshot_annotations setting not found in config"
-fi
+# Function to update or add a setting in config.toml
+update_config() {
+    local SETTING=$1
+    local OLD_VALUE=$2
+    local NEW_VALUE=$3
+    local SECTION=$4
+    
+    if grep -q "$SETTING = $OLD_VALUE" "$CONTAINERD_CONFIG"; then
+        sed -i "s/$SETTING = $OLD_VALUE/$SETTING = $NEW_VALUE/g" "$CONTAINERD_CONFIG"
+        echo "Changed $SETTING from $OLD_VALUE to $NEW_VALUE"
+    elif [ -n "$SECTION" ] && ! grep -q "$SETTING = " "$CONTAINERD_CONFIG"; then
+        # Add setting to specified section if it doesn't exist
+        if grep -q "\[$SECTION\]" "$CONTAINERD_CONFIG"; then
+            sed -i "/\[$SECTION\]/a \\$SETTING = $NEW_VALUE" "$CONTAINERD_CONFIG"
+            echo "Added $SETTING = $NEW_VALUE to [$SECTION] section"
+        else
+            echo "Warning: [$SECTION] section not found in config"
+        fi
+    else
+        echo "Warning: $SETTING setting not found in config"
+    fi
+}
 
+# Update snapshot annotations setting
+update_config "disable_snapshot_annotations" "true" "false"
+
+# Add guest-pull plugin configuration
 if grep -q "\[proxy_plugins\]" "$CONTAINERD_CONFIG"; then
     sed -i '/\[proxy_plugins\]/a \
 \[proxy_plugins.guest-pull\]\n      type = "snapshot"\n      address = "\/run\/containerd-guest-pull-grpc\/containerd-guest-pull-grpc.sock"' "$CONTAINERD_CONFIG"
@@ -19,27 +39,21 @@ else
     echo -e "\n[proxy_plugins]\n[proxy_plugins.guest-pull]\n      type = \"snapshot\"\n      address = \"/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock\"" >> "$CONTAINERD_CONFIG"
 fi
 
-if grep -q 'snapshotter = "nydus"' "$CONTAINERD_CONFIG"; then
-    sed -i 's/snapshotter = "nydus"/snapshotter = "guest-pull"/g' "$CONTAINERD_CONFIG"
-    echo "Changed snapshotter from nydus to guest-pull"
-else
-    echo "Warning: snapshotter = \"nydus\" setting not found in config"
-fi
+# Update snapshotter setting
+update_config "snapshotter" "\"nydus\"" "\"guest-pull\""
 
+# Update other settings
 sed -i 's/level = ""/level = "debug"/g' "$CONTAINERD_CONFIG"
-sed -i 's/import = [*]/import = []/g' "$CONTAINERD_CONFIG"
+sed -i 's/import = \[\*\]/import = \[\]/g' "$CONTAINERD_CONFIG"
 
-    
-echo "Successfully added guest-pull plugin configuration to containerd config"
+echo "Successfully configured guest-pull plugin in containerd"
 
-cat /etc/containerd/config.toml
+# Display the updated config
+cat "$CONTAINERD_CONFIG"
 
-echo "run guest-pull snapshotter"
-
-sudo containerd-guest-pull-grpc > /tmp/containerd-guest-pull-grpc.log --log-level debug 2>&1 & 
-
+# Restart containerd to apply changes
 systemctl restart containerd
-
 echo "Containerd has been configured with guest-pull plugin and restarted"
 
-ctr plugin ls|grep snapshotter
+# Verify plugin is loaded
+ctr plugin ls | grep snapshotter

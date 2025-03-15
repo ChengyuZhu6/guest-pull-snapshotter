@@ -91,9 +91,11 @@ jobs:
           sudo -E ./tests/prepare/install_k8s.sh
           sudo -E ./tests/prepare/install_coco.sh
           sudo -E ./tests/prepare/install_new_kata.sh
+          sudo -E ./tests/prepare/enable_guest-pull_service.sh
           sudo -E ./tests/prepare/configure_guest-pull.sh
 
       - name: Run integration tests
         run: |
           sudo -E ./tests/test-cases/functional.sh
+          sudo -E ./tests/test-cases/compatibility.sh
 

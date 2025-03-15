@@ -1,121 +1,64 @@
 #!/bin/bash
 set -e
 
+# Source common test utilities
+source tests/utils/test_utils.sh
+
+# Define test images
 declare -A TEST_IMAGES
 TEST_IMAGES["busybox"]="quay.io/chengyuzhu6/busybox:latest"
-TEST_IMAGES["ubuntu"]="quay.io/chengyuzhu6/ubuntu:24.04"
+TEST_IMAGES["nginx"]="quay.io/chengyuzhu6/nginx:latest"
 
-declare -A TEST_COMMANDS
-TEST_COMMANDS["busybox"]="sleep 120"
-TEST_COMMANDS["ubuntu"]="sleep 120" 
+echo "Running functional tests for guest-pull"
 
-export KUBECONFIG=/etc/kubernetes/admin.conf
-
-echo "Running functional tests"
-
-wait_for_pod() {
-    local POD_NAME=$1
-    local TIMEOUT=$2
-    
-    echo "Waiting for pod $POD_NAME to be ready (timeout: ${TIMEOUT}s)..."
-    
-    if ! kubectl wait --timeout="${TIMEOUT}s" --for=condition=ready "pods/$POD_NAME"; then
-        echo "ERROR: Pod $POD_NAME failed to become ready within ${TIMEOUT}s"
-        echo "Pod details:"
-        kubectl describe pod "$POD_NAME"
-        echo "Pod logs:"
-        kubectl logs "$POD_NAME" || echo "Could not get logs for $POD_NAME"
-        # echo "containerd logs:"
-        # journalctl -t containerd
-        echo "containerd-guest-pull-grpc logs:"
-        cat /tmp/containerd-guest-pull-grpc.log
-        return 1
-    fi
-    echo "Pod $POD_NAME is ready"
-    kubectl describe pod "$POD_NAME"
-    return 0
-}
-
-verify_image_integrity() {
+test_guest_pull_with_image() {
     local IMAGE_NAME=$1
-    
-    echo "Verifying integrity of image: $IMAGE_NAME"
-    
-    echo "Checking image completeness..."
-    local CHECK_OUTPUT=$(ctr -n k8s.io images check |grep "$IMAGE_NAME" 2>&1)
-    ctr -n k8s.io images check |grep "$IMAGE_NAME"
-    if echo "$CHECK_OUTPUT" | grep -q "incomplete"; then
-        echo "Guest pull success: Image $IMAGE_NAME is not pulled in the host!"
-        return 0
-    else
-        echo "Guest pull failure: Image $IMAGE_NAME is pulled in the host!"
-        return 1
-    fi
-}
-
-test_runtime_with_image() {
-    local RUNTIME=$1
-    local IMAGE_NAME=$2
     local IMAGE_URL=${TEST_IMAGES[$IMAGE_NAME]}
-    local COMMAND=${TEST_COMMANDS[$IMAGE_NAME]}
+    local RUNTIME="kata-qemu-coco-dev"
     
     local POD_NAME="functional-test-${RUNTIME}-${IMAGE_NAME}"
-    local YAML_FILE="/tmp/${POD_NAME}.yaml"
     
-    echo "Testing runtime '$RUNTIME' with image '$IMAGE_NAME' ($IMAGE_URL)"
+    echo "Testing guest-pull with image '$IMAGE_NAME' ($IMAGE_URL)"
     
-    cat > "$YAML_FILE" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: $POD_NAME
-  annotations:
-    io.containerd.cri.runtime-handler: ${RUNTIME}
-spec:
-  runtimeClassName: ${RUNTIME}
-  containers:
-  - name: guest-pull-container
-    image: ${IMAGE_URL}
-    command: ["/bin/sh", "-c", "${COMMAND}"]
-EOF
+    # Deploy the pod
+    deploy_test_pod "$RUNTIME" "$IMAGE_URL" "$POD_NAME"
     
-    echo "Deploying $POD_NAME..."
-    cat "$YAML_FILE"
-    kubectl apply -f "$YAML_FILE"
-    
+    # Wait for pod to be ready
     if ! wait_for_pod "$POD_NAME" 120; then
-        echo "Test failed for runtime '$RUNTIME' with image '$IMAGE_NAME'"
-        rm -f "$YAML_FILE"
+        echo "Test failed: Pod did not become ready"
+        delete_pod "$POD_NAME"
         return 1
     fi
 
-    if ! verify_image_integrity "${IMAGE_NAME}"; then
-        echo "Image check failed for runtime '$RUNTIME' with image '$IMAGE_NAME'"
-        kubectl delete -f "$YAML_FILE"
-        rm -f "$YAML_FILE"
+    # Verify image integrity
+    if ! verify_image_integrity "$IMAGE_NAME"; then
+        echo "Test failed: Image integrity check failed"
+        delete_pod "$POD_NAME"
         return 1
     fi
     
-    echo "Test passed for runtime '$RUNTIME' with image '$IMAGE_NAME'"
-    kubectl delete -f "$YAML_FILE"
-    rm -f "$YAML_FILE"
+    echo "Test passed for image '$IMAGE_NAME'"
+    delete_pod "$POD_NAME"
     return 0
 }
 
-run_all_tests() {    
+run_all_tests() {
+    local FAILED=0
+    
     for IMAGE_NAME in "${!TEST_IMAGES[@]}"; do
-        if ! test_runtime_with_image "kata-qemu-coco-dev" "$IMAGE_NAME"; then
-            return 1
+        if ! test_guest_pull_with_image "$IMAGE_NAME"; then
+            FAILED=1
         fi
     done
     
-    return 0
+    return $FAILED
 }
 
+# Run all tests and report results
 if run_all_tests; then
-    echo "All functional tests passed successfully"
+    echo "✅ All functional tests passed successfully"
 else
-    echo "Some tests failed"
+    echo "❌ Some tests failed"
     exit 1
 fi
 
