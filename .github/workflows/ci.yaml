@@ -98,4 +98,4 @@ jobs:
         run: |
           sudo -E ./tests/test-cases/functional.sh
           sudo -E ./tests/test-cases/compatibility.sh
-
+          sudo -E ./tests/test-cases/stability.sh

@@ -5,6 +5,12 @@
 # Set up environment
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
+# Common test images used across all tests
+declare -A TEST_IMAGES
+TEST_IMAGES["busybox"]="quay.io/chengyuzhu6/busybox:latest"
+TEST_IMAGES["ubuntu"]="quay.io/chengyuzhu6/ubuntu:24.04"
+TEST_IMAGES["nginx"]="quay.io/chengyuzhu6/nginx:latest"
+
 # Wait for pod to be ready
 wait_for_pod() {
     local POD_NAME=$1
@@ -47,6 +53,7 @@ spec:
     command:
       - sleep
       - "120"
+    imagePullPolicy: Always
 EOF
     else
         cat > "$YAML_FILE" <<EOF
@@ -81,6 +88,7 @@ delete_pod() {
     local POD_NAME=$1
     local YAML_FILE="/tmp/${POD_NAME}.yaml"
     
+    echo "Deleting pod $POD_NAME..."
     if [ -f "$YAML_FILE" ]; then
         kubectl delete -f "$YAML_FILE" --ignore-not-found
         rm -f "$YAML_FILE"
@@ -103,4 +111,96 @@ verify_image_integrity() {
         echo "Guest pull failure: Image $IMAGE_NAME is pulled in the host!"
         return 1
     fi
+}
+
+# Function to verify a pod has been completely deleted
+wait_for_pod_deletion() {
+    local POD_NAME=$1
+    local TIMEOUT=${2:-60}  # Default timeout of 60 seconds
+    local INTERVAL=2        # Check every 2 seconds
+    local ELAPSED=0
+    
+    echo "Waiting for pod '$POD_NAME' to be deleted (timeout: ${TIMEOUT}s)..."
+    
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        # Check if the pod still exists
+        if ! kubectl get pod "$POD_NAME" &>/dev/null; then
+            echo "Pod '$POD_NAME' has been successfully deleted"
+            return 0
+        fi
+        
+        sleep $INTERVAL
+        ELAPSED=$((ELAPSED + INTERVAL))
+        echo "Still waiting for pod deletion... ($ELAPSED/$TIMEOUT seconds)"
+    done
+    
+    echo "Timeout reached. Pod '$POD_NAME' was not deleted within ${TIMEOUT} seconds"
+    return 1
+}
+
+# Run a complete test cycle for a pod
+run_pod_test() {
+    local RUNTIME=$1
+    local IMAGE_NAME=$2
+    local TEST_TYPE=$3
+    local VERIFY_INTEGRITY=${4:-false}
+    
+    local IMAGE_URL=${TEST_IMAGES[$IMAGE_NAME]}
+    local POD_NAME="${TEST_TYPE}-test-${RUNTIME}-${IMAGE_NAME}"
+    
+    echo "Testing runtime '$RUNTIME' with image '$IMAGE_NAME' ($IMAGE_URL)"
+    
+    # Deploy the pod
+    deploy_test_pod "$RUNTIME" "$IMAGE_URL" "$POD_NAME"
+    
+    # Wait for pod to be ready
+    if ! wait_for_pod "$POD_NAME" 120; then
+        echo "Test failed for runtime '$RUNTIME' with image '$IMAGE_NAME'"
+        delete_pod "$POD_NAME"
+        return 1
+    fi
+    
+    # Verify image integrity if requested (for guest-pull tests)
+    if [ "$VERIFY_INTEGRITY" = true ]; then
+        if ! verify_image_integrity "$IMAGE_NAME"; then
+            echo "Test failed: Image integrity check failed for '$IMAGE_NAME'"
+            delete_pod "$POD_NAME"
+            return 1
+        fi
+    fi
+    
+    echo "Test passed for runtime '$RUNTIME' with image '$IMAGE_NAME'"
+    delete_pod "$POD_NAME"
+    
+    # Wait for pod deletion
+    if ! wait_for_pod_deletion "$POD_NAME" 60; then
+        echo "❌ Warning: Pod deletion timed out"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Find and kill the guest-pull process with specified signal
+kill_guest_pull_process() {
+    local SIGNAL=$1
+    
+    echo "Finding and killing containerd-guest-pull-grpc process with signal ${SIGNAL}..."
+    local GRPC_PID=$(pgrep -f "containerd-guest-pull-grpc" || echo "")
+    
+    if [ -z "$GRPC_PID" ]; then
+        echo "❌ Failed to find containerd-guest-pull-grpc process"
+        return 1
+    fi
+    
+    echo "Found containerd-guest-pull-grpc process with PID: $GRPC_PID"
+    kill -${SIGNAL} $GRPC_PID
+    echo "Sent signal ${SIGNAL} to process ${GRPC_PID}"
+    
+    # Restart the service
+    echo "Restarting guest-pull snapshotter service..."
+    sudo systemctl restart guest-pull-snapshotter
+    sudo systemctl status guest-pull-snapshotter
+    
+    return 0
 } 
