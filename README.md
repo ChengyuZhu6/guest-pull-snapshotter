@@ -56,10 +56,10 @@ Update your containerd configuration (`/etc/containerd/config.toml`) to use the 
   [proxy_plugins.guest-pull]
     type = "snapshot"
     address = "/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock"
-
-[plugins."io.containerd.grpc.v1.cri"]
-  disable_snapshot_annotations = false
-  snapshotter = "guest-pull"
+[plugins."io.containerd.grpc.v1.cri".containerd]
+    disable_snapshot_annotations = false
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu-coco-dev]
+    snapshotter = "guest-pull"
 ```
 
 ### 4. Install Confidential Containers (CoCo)
@@ -75,7 +75,7 @@ The Guest Pull Snapshotter requires a patched version of Kata Containers:
 
 ```bash
 # Install patched Kata Containers
-sudo ./tests/prepare/install_new_kata.sh
+sudo ./tests/prepare/install_patched_kata_runtime.sh
 ```
 
 ## Usage
