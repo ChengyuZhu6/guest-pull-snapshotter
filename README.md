@@ -1,0 +1,1 @@
+# guest-pull-snapshotter
