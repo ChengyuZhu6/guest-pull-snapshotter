@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6.5.0
+        with:
+          version: v1.64.5
+          args: --verbose --timeout=10m
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Build guest-pull binaries
+        run: make
+        
+      - name: Upload guest-pull binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-pull-binaries
+          path: |
+            bin/guest-pull-overlayfs
+            bin/containerd-guest-pull-grpc
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-24.04
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+          
+      - name: Download guest-pull binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-pull-binaries
+          
+      - name: Install guest-pull binaries
+        run: |
+          sudo mv guest-pull-overlayfs /usr/local/bin/
+          sudo mv containerd-guest-pull-grpc /usr/local/bin/
+          sudo chmod +x /usr/local/bin/containerd-guest-pull-grpc
+          sudo chmod +x /usr/local/bin/guest-pull-overlayfs
+          
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-transport-https ca-certificates curl gnupg git
+
+      - name: Setup test environment
+        run: |
+          sudo -E ./tests/prepare/install_containerd.sh
+          sudo -E ./tests/prepare/install_k8s.sh
+          sudo -E ./tests/prepare/install_coco.sh
+          sudo -E ./tests/prepare/install_patched_kata_runtime.sh
+          sudo -E ./tests/prepare/enable_guest-pull_service.sh
+          sudo -E ./tests/prepare/configure_guest-pull.sh
+
+      - name: Run functional tests
+        run: sudo -E ./tests/test-cases/functional.sh
+        
+      - name: Run compatibility tests
+        run: sudo -E ./tests/test-cases/compatibility.sh
+        
+      - name: Run stability tests
+        run: sudo -E ./tests/test-cases/stability.sh
