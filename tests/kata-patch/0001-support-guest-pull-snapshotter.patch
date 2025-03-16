@@ -1,0 +1,71 @@
+From b471400b36a1c53c1c9dfb71c642691b5073ee98 Mon Sep 17 00:00:00 2001
+From: ChengyuZhu6 <hudson@cyzhu.com>
+Date: Wed, 12 Mar 2025 10:36:32 +0800
+Subject: [PATCH] support guest-pull snapshotter
+
+Signed-off-by: ChengyuZhu6 <hudson@cyzhu.com>
+---
+ src/runtime/pkg/containerd-shim-v2/create.go | 2 +-
+ src/runtime/pkg/katautils/create.go          | 2 +-
+ src/runtime/virtcontainers/container.go      | 2 +-
+ src/runtime/virtcontainers/kata_agent.go     | 8 ++++++++
+ 4 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/runtime/pkg/containerd-shim-v2/create.go b/src/runtime/pkg/containerd-shim-v2/create.go
+index c272c89d4..f7a2f9999 100644
+--- a/src/runtime/pkg/containerd-shim-v2/create.go
++++ b/src/runtime/pkg/containerd-shim-v2/create.go
+@@ -318,7 +318,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
+ 			return false, nil
+ 		}
+ 
+-		if vc.IsNydusRootFSType(m.Type) {
++		if vc.IsNydusRootFSType(m.Type) || vc.IsGuestPullRootFSType(m.Type) {
+ 			// if kata + nydus, do not mount
+ 			return false, nil
+ 		}
+diff --git a/src/runtime/pkg/katautils/create.go b/src/runtime/pkg/katautils/create.go
+index 758e83a3b..66355755a 100644
+--- a/src/runtime/pkg/katautils/create.go
++++ b/src/runtime/pkg/katautils/create.go
+@@ -244,7 +244,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
+ 	}
+ 
+ 	if !rootFs.Mounted {
+-		if rootFs.Source != "" && !vc.IsNydusRootFSType(rootFs.Type) {
++		if rootFs.Source != "" && !vc.IsNydusRootFSType(rootFs.Type) && !vc.IsGuestPullRootFSType(rootFs.Type) {
+ 			realPath, err := ResolvePath(rootFs.Source)
+ 			if err != nil {
+ 				return vc.Process{}, err
+diff --git a/src/runtime/virtcontainers/container.go b/src/runtime/virtcontainers/container.go
+index 536fbcff1..862ac17db 100644
+--- a/src/runtime/virtcontainers/container.go
++++ b/src/runtime/virtcontainers/container.go
+@@ -1039,7 +1039,7 @@ func (c *Container) create(ctx context.Context) (err error) {
+ 		}
+ 	}()
+ 
+-	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) {
++	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !IsGuestPullRootFSType(c.rootFs.Type) {
+ 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
+ 		if err = c.hotplugDrive(ctx); err != nil {
+ 			return
+diff --git a/src/runtime/virtcontainers/kata_agent.go b/src/runtime/virtcontainers/kata_agent.go
+index 25f08d63a..9d9f321fb 100644
+--- a/src/runtime/virtcontainers/kata_agent.go
++++ b/src/runtime/virtcontainers/kata_agent.go
+@@ -2692,3 +2692,11 @@ func IsNydusRootFSType(s string) bool {
+ 	s = strings.TrimPrefix(s, "fuse.")
+ 	return strings.HasPrefix(path.Base(s), "nydus-overlayfs")
+ }
++
++func IsGuestPullRootFSType(s string) bool {
++	if !strings.HasPrefix(s, "fuse.") {
++		return false
++	}
++	s = strings.TrimPrefix(s, "fuse.")
++	return strings.HasPrefix(path.Base(s), "guest-pull-overlayfs")
++}
+-- 
+2.47.1
+
