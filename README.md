@@ -49,19 +49,35 @@ sudo ./tests/prepare/enable_guest-pull_service.sh
 
 ### 3. Configure containerd
 
+#### for containerd version 1.7.x
 Update your containerd configuration (`/etc/containerd/config.toml`) to use the guest-pull snapshotter:
 
 ```toml
-[proxy_plugins]
-  [proxy_plugins.guest-pull]
-    type = "snapshot"
-    address = "/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock"
 [plugins."io.containerd.grpc.v1.cri".containerd]
     disable_snapshot_annotations = false
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu-coco-dev]
     snapshotter = "guest-pull"
+[proxy_plugins]
+  [proxy_plugins.guest-pull]
+    type = "snapshot"
+    address = "/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock"
 ```
 
+#### for containerd version 2.0.x
+Update your containerd configuration (`/etc/containerd/config.toml`) to use the guest-pull snapshotter:
+
+```toml
+[plugins."io.containerd.cri.v1.images".runtime_platforms.kata-qemu-coco-dev]
+    snapshotter = "guest-pull"
+[plugins."io.containerd.cri.v1.images"]
+    disable_snapshot_annotations = false
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.kata-qemu-coco-dev]
+    snapshotter = "guest-pull"
+[proxy_plugins]
+  [proxy_plugins.guest-pull]
+    type = "snapshot"
+    address = "/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock"
+```
 ### 4. Install Confidential Containers (CoCo)
 
 ```bash
@@ -87,6 +103,8 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: nginx-kata
+  annotations:
+    io.containerd.cri.runtime-handler: kata-qemu-coco-dev
 spec:
   runtimeClassName: kata-qemu-coco-dev
   containers:

@@ -22,7 +22,7 @@ const (
 	DefaultLogLevel = log.InfoLevel
 
 	// DefaultRootDir is the default root directory for the snapshotter
-	DefaultRootDir = "/var/lib/containerd-guest-pull-grpc"
+	DefaultRootDir = "/var/lib/containerd/io.containerd.snapshotter.v1.guest-pull"
 
 	// DefaultImageServiceAddress is the default address for the containerd image service
 	DefaultImageServiceAddress = "/run/containerd/containerd.sock"
@@ -64,16 +64,16 @@ func ValidateConfig() error {
 	if *RootDir == "" {
 		return errors.New("root directory must be specified")
 	}
-	
+
 	if err := os.MkdirAll(*RootDir, 0700); err != nil {
 		return errors.Wrapf(err, "failed to create root directory %s", *RootDir)
 	}
-	
+
 	// Test write permissions with a single operation
 	testFile := filepath.Join(*RootDir, ".write_test")
 	if err := os.WriteFile(testFile, []byte{}, 0600); err != nil {
 		return errors.Wrapf(err, "root directory %s is not writable", *RootDir)
 	}
-	
+
 	return os.Remove(testFile)
 }

@@ -60,9 +60,15 @@ jobs:
             bin/containerd-guest-pull-grpc
 
   integration-test:
-    name: Integration Test
+    name: Integration Test (containerd ${{ matrix.containerd-version }})
     runs-on: ubuntu-24.04
     needs: [build]
+    strategy:
+      matrix:
+        containerd-version: ['1.7.26', '2.0.3']
+      fail-fast: false
+    env:
+      CONTAINERD_VERSION: ${{ matrix.containerd-version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

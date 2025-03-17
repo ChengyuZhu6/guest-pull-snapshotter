@@ -1,9 +1,11 @@
 #!/bin/bash
 set -e
 
-echo "Configuring guest pull in containerd"
-
+CONTAINERD_VERSION=${CONTAINERD_VERSION:-"1.7.26"}
+CONTAINERD_MAJOR_VERSION=$(echo $CONTAINERD_VERSION | cut -d. -f1)
 CONTAINERD_CONFIG="/etc/containerd/config.toml"
+
+echo "Configuring guest pull in containerd"
 
 # Function to update or add a setting in config.toml
 update_config() {
@@ -42,8 +44,21 @@ if ! grep -q "\[proxy_plugins.guest-pull\]" "$CONTAINERD_CONFIG"; then
     echo "Added guest-pull plugin configuration"
 fi
 
-# Update snapshotter setting
-update_config "snapshotter" "\"nydus\"" "\"guest-pull\""
+# Update the snapshotter for kata runtime
+if [[ "$CONTAINERD_MAJOR_VERSION" -ge 2 ]]; then
+    # Used for containerd 2.0+
+    # Replace snapshotter in kata-deploy.toml
+    sed -i 's/snapshotter = "nydus"/snapshotter = "guest-pull"/g' "/opt/kata/containerd/config.d/kata-deploy.toml"
+
+    # Also update the cri image plugin's snapshotter for kata runtime
+    echo -e '\n[plugins."io.containerd.cri.v1.images".runtime_platforms.kata-qemu-coco-dev]\nsnapshotter = "guest-pull"' >> "$CONTAINERD_CONFIG"
+    echo "Added CRI plugin configuration with guest-pull snapshotter"
+
+    cat /opt/kata/containerd/config.d/kata-deploy.toml
+else
+    # Used for containerd 1.7.x
+    update_config "snapshotter" "\"nydus\"" "\"guest-pull\""
+fi
 
 # Update other settings
 sed -i 's/level = ""/level = "debug"/g' "$CONTAINERD_CONFIG"

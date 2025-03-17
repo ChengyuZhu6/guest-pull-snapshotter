@@ -148,6 +148,8 @@ verify_image_integrity() {
         return 0
     else
         echo "Guest pull failure: Image $IMAGE_NAME is pulled in the host!"
+        systemctl status guest-pull-snapshotter
+        journalctl -xeu containerd
         return 1
     fi
 }
