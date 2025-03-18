@@ -49,10 +49,12 @@ sudo ./tests/prepare/enable_guest-pull_service.sh
 
 ### 3. Configure containerd
 
-#### for containerd version 1.7.x
-Update your containerd configuration (`/etc/containerd/config.toml`) to use the guest-pull snapshotter:
+Different containerd versions have different configuration formats: https://github.com/containerd/containerd/blob/main/docs/cri/config.md. Please refer to the following instructions for different containerd versions to use guest-pull snapshotter.
+
+#### For containerd version 1.7.x
 
 ```toml
+version = 2
 [plugins."io.containerd.grpc.v1.cri".containerd]
     disable_snapshot_annotations = false
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu-coco-dev]
@@ -63,10 +65,10 @@ Update your containerd configuration (`/etc/containerd/config.toml`) to use the 
     address = "/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock"
 ```
 
-#### for containerd version 2.0.x
-Update your containerd configuration (`/etc/containerd/config.toml`) to use the guest-pull snapshotter:
+#### For containerd version 2.0.x
 
 ```toml
+version = 3
 [plugins."io.containerd.cri.v1.images".runtime_platforms.kata-qemu-coco-dev]
     snapshotter = "guest-pull"
 [plugins."io.containerd.cri.v1.images"]
