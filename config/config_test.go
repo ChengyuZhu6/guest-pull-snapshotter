@@ -13,7 +13,7 @@ func TestDefaultValues(t *testing.T) {
 	assert.Equal(t, "/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock", DefaultAddress)
 	assert.Equal(t, "/etc/containerd-guest-pull-grpc/config.toml", DefaultConfigPath)
 	assert.Equal(t, log.InfoLevel, DefaultLogLevel)
-	assert.Equal(t, "/var/lib/containerd-guest-pull-grpc", DefaultRootDir)
+	assert.Equal(t, "/var/lib/containerd/io.containerd.snapshotter.v1.guest-pull", DefaultRootDir)
 	assert.Equal(t, "/run/containerd/containerd.sock", DefaultImageServiceAddress)
 }
 

@@ -62,4 +62,7 @@ sleep 10
 kubectl get pods -n confidential-containers-system
 kubectl get runtimeclass
 
+echo "Check the containerd config file"
+cat /etc/containerd/config.toml
+
 echo "CoCo installation completed successfully"

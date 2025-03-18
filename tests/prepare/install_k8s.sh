@@ -2,9 +2,18 @@
 
 set -e
 
+CONTAINERD_VERSION=${CONTAINERD_VERSION:-"1.7.26"}
+CONTAINERD_MAJOR_VERSION=$(echo $CONTAINERD_VERSION | cut -d. -f1)
 K8S_VERSION=${K8S_VERSION:-"1.29.2"}
 FLANNEL_VERSION=${FLANNEL_VERSION:-"v0.24.0"}
 POD_NETWORK_CIDR=${POD_NETWORK_CIDR:-"10.244.0.0/16"}
+
+# Use newer Flannel version for containerd 2.0+
+if [[ "$CONTAINERD_MAJOR_VERSION" -ge 2 ]]; then
+    echo "Detected containerd version $CONTAINERD_VERSION (2.0+), using Flannel v0.26.5"
+    FLANNEL_VERSION="v0.25.6"
+    K8S_VERSION="1.30.1"
+fi
 
 echo "Installing Kubernetes ${K8S_VERSION} with Flannel ${FLANNEL_VERSION}"
 
@@ -59,6 +68,28 @@ echo "Initializing Kubernetes control plane"
 sudo kubeadm config images pull --kubernetes-version=${K8S_VERSION}
 sudo kubeadm init --pod-network-cidr=${POD_NETWORK_CIDR} --kubernetes-version=${K8S_VERSION}
 export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# Wait for API server to be available
+echo "Waiting for API server to be available..."
+TIMEOUT=300
+INTERVAL=5
+ELAPSED=0
+
+while [ $ELAPSED -lt $TIMEOUT ]; do
+    if kubectl get --raw='/healthz' &>/dev/null; then
+        echo "API server is available!"
+        break
+    fi
+    echo "API server not available yet, waiting... ($ELAPSED/$TIMEOUT seconds)"
+    sleep $INTERVAL
+    ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+if [ $ELAPSED -ge $TIMEOUT ]; then
+    echo "Timeout waiting for API server to be available"
+    systemctl status kubelet --no-pager
+    exit 1
+fi
     
 echo "Installing Flannel ${FLANNEL_VERSION}"
 kubectl apply -f https://github.com/flannel-io/flannel/releases/download/${FLANNEL_VERSION}/kube-flannel.yml
