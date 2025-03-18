@@ -10,6 +10,9 @@ TEST_IMAGES["busybox"]="quay.io/chengyuzhu6/busybox:latest"
 TEST_IMAGES["ubuntu"]="quay.io/chengyuzhu6/ubuntu:24.04"
 TEST_IMAGES["nginx"]="quay.io/chengyuzhu6/nginx:latest"
 
+# Test result tracking
+TEST_RESULTS=()
+
 print_header() {
     local TITLE=$1
     echo ""
@@ -35,7 +38,7 @@ wait_for_pod() {
     
     echo "Waiting for pod $POD_NAME to be ready (timeout: ${TIMEOUT}s)..."
     
-    if ! kubectl wait --timeout="${TIMEOUT}s" --for=condition=ready "pods/$POD_NAME"; then
+    if ! kubectl wait --timeout="${TIMEOUT}s" --for=condition=ready "pods/$POD_NAME" 2>/dev/null; then
         echo "ERROR: Pod $POD_NAME failed to become ready within ${TIMEOUT}s"
         kubectl describe pod "$POD_NAME"
         kubectl logs "$POD_NAME" 2>/dev/null || true
@@ -79,13 +82,17 @@ deploy_test_pod() {
     
     echo "Creating pod $POD_NAME with runtime '$RUNTIME' and image '$IMAGE'"
     
-    if [ "$RUNTIME" == "runc" ]; then
+    # Common pod configuration
+    if [ "$RUNTIME" != "runc" ]; then
         cat > "$YAML_FILE" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
   name: ${POD_NAME}
+  annotations:
+    io.containerd.cri.runtime-handler: ${RUNTIME}
 spec:
+  runtimeClassName: ${RUNTIME}
   containers:
   - name: test-container
     image: ${IMAGE}
@@ -100,10 +107,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: ${POD_NAME}
-  annotations:
-    io.containerd.cri.runtime-handler: ${RUNTIME}
 spec:
-  runtimeClassName: ${RUNTIME}
   containers:
   - name: test-container
     image: ${IMAGE}
@@ -214,4 +218,20 @@ kill_snapshotter_process() {
     sudo systemctl status guest-pull-snapshotter
     
     return 0
-} 
+}
+
+# Run test suite and report results
+run_test_suite() {
+    local SUITE_NAME=$1
+    local TEST_FUNCTION=$2
+    
+    print_header "$SUITE_NAME"
+    
+    if $TEST_FUNCTION; then
+        print_header "$SUITE_NAME: PASSED ✅"
+        return 0
+    else
+        print_header "$SUITE_NAME: FAILED ❌"
+        return 1
+    fi
+}

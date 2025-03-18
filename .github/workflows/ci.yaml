@@ -72,6 +72,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GUEST_PULL_TOKEN }}
           
       - name: Download guest-pull binaries
         uses: actions/download-artifact@v4
@@ -107,3 +114,8 @@ jobs:
         
       - name: Run stability tests
         run: sudo -E ./tests/test-cases/stability.sh
+
+      - name: Run private registry tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GUEST_PULL_TOKEN }}
+        run: sudo -E ./tests/test-cases/authentication.sh

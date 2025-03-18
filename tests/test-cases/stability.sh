@@ -107,13 +107,14 @@ test_kill_signal() {
     return 0
 }
 
-# Run all signal tests and collect results
-run_all_tests() {
+run_stability_tests() {
     local SIGNALS=(
         "2:SIGINT (Ctrl+C)"
         "15:SIGTERM (graceful termination)"
         "9:SIGKILL (force kill)"
     )
+    
+    echo "Testing system stability with various signals to guest-pull snapshotter"
     
     for signal_info in "${SIGNALS[@]}"; do
         IFS=':' read -r signal name <<< "$signal_info"
@@ -125,10 +126,5 @@ run_all_tests() {
     return 0
 }
 
-if run_all_tests; then
-    print_header "STABILITY TESTS: PASSED ✅"
-else
-    print_header "STABILITY TESTS: FAILED ❌"
-    exit 1
-fi
+run_test_suite "STABILITY TESTS" run_stability_tests || exit 1
 
