@@ -137,6 +137,7 @@ make test
 sudo ./tests/test-cases/functional.sh
 sudo ./tests/test-cases/compatibility.sh
 sudo ./tests/test-cases/stability.sh
+sudo ./tests/test-cases/authentication.sh
 ```
 
 ### Test Suites
@@ -144,6 +145,7 @@ sudo ./tests/test-cases/stability.sh
 1. **Functional Tests**: Verify the core functionality of guest image pulling
 2. **Compatibility Tests**: Verify that both runc and kata-qemu-coco-dev runtimes can successfully run containers with various images
 3. **Stability Tests**: Verify system stability with various signals to the guest-pull snapshotter service
+4. **Authentication Tests**: Verify the snapshotter can pull private image with credentials
 
 ## Troubleshooting
 
