@@ -24,11 +24,9 @@ set -e
 
 source tests/utils/test_utils.sh
 
-print_header "FUNCTIONAL TESTS"
-echo "Testing guest-pull functionality with kata-qemu-coco-dev runtime"
-
-run_all_tests() {
+run_functional_tests() {
     local RUNTIME="kata-qemu-coco-dev"
+    echo "Testing guest-pull functionality with $RUNTIME runtime"
     
     for IMAGE_NAME in "${!TEST_IMAGES[@]}"; do
         if ! run_pod_test "$RUNTIME" "$IMAGE_NAME" "functional" true; then
@@ -39,9 +37,4 @@ run_all_tests() {
     return 0
 }
 
-if run_all_tests; then
-    print_header "FUNCTIONAL TESTS: PASSED ✅"
-else
-    print_header "FUNCTIONAL TESTS: FAILED ❌"
-    exit 1
-fi
+run_test_suite "FUNCTIONAL TESTS" run_functional_tests || exit 1

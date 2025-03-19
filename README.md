@@ -123,7 +123,7 @@ The Guest Pull Snapshotter can be configured using command-line flags or environ
 | `--address` | `GUEST_PULL_ADDRESS` | `/run/containerd-guest-pull-grpc/containerd-guest-pull-grpc.sock` | Socket path for the gRPC server |
 | `--config` | `GUEST_PULL_CONFIG` | `/etc/containerd-guest-pull-grpc/config.toml` | Path to configuration file |
 | `--log-level` | `GUEST_PULL_LOG_LEVEL` | `info` | Logging level |
-| `--root` | `GUEST_PULL_ROOT` | `/var/lib/containerd-guest-pull-grpc` | Root directory for the snapshotter |
+| `--root` | `GUEST_PULL_ROOT` | `/var/lib/containerd/io.containerd.snapshotter.v1.guest-pull` | Root directory for the snapshotter |
 
 ## Testing
 

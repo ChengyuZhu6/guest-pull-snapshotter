@@ -24,11 +24,9 @@ set -e
 
 source tests/utils/test_utils.sh
 
-print_header "COMPATIBILITY TESTS"
-echo "Testing compatibility between runc and kata-qemu-coco-dev runtimes"
-
-run_all_tests() {
+run_compatibility_tests() {
     local RUNTIMES=("runc" "kata-qemu-coco-dev")
+    echo "Testing compatibility between runc and kata-qemu-coco-dev runtimes"
 
     for RUNTIME in "${RUNTIMES[@]}"; do
         print_subheader "Testing $RUNTIME runtime"
@@ -42,9 +40,4 @@ run_all_tests() {
     return 0
 }
 
-if run_all_tests; then
-    print_header "COMPATIBILITY TESTS: PASSED ✅"
-else
-    print_header "COMPATIBILITY TESTS: FAILED ❌"
-    exit 1
-fi
+run_test_suite "COMPATIBILITY TESTS" run_compatibility_tests || exit 1
