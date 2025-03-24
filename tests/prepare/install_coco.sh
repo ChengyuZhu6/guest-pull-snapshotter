@@ -65,4 +65,9 @@ kubectl get runtimeclass
 echo "Check the containerd config file"
 cat /etc/containerd/config.toml
 
+echo "Set shared_fs to virtio-9p"
+sed -i 's/^shared_fs\s*=.*/shared_fs = "virtio-9p"/g' /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+
+cat /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml | grep "shared_fs"
+
 echo "CoCo installation completed successfully"
